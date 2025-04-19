@@ -4,7 +4,7 @@ import axios from 'axios';
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const baseURL = 'https://slotbot-server-pf6jqvc3r-sethuravichandrans-projects.vercel.app/'
+  const baseURL = 'https://slotbot-server.vercel.app/'
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
