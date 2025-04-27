@@ -4,7 +4,7 @@ import axios from 'axios';
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const baseURL = 'https://slotbot-server.vercel.app/'
+  const baseURL = 'http://localhost:3500/'
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -12,7 +12,9 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const response = await axios.get(`${baseURL}api/auth/me`);
+        const response = await axios.get(`${baseURL}api/auth/me`,
+          {withCredentials:true}
+        );
         if (response.data.user) {
           setUser(response.data.user);
         }
@@ -28,7 +30,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post(`${baseURL}api/auth/login`, { email, password });
+      const response = await axios.post(`${baseURL}api/auth/login`, { email, password },{withCredentials:true});
       setUser(response.data.user);
     } catch (error) {
       console.error('Login failed:', error);
@@ -38,7 +40,7 @@ export function AuthProvider({ children }) {
 
   const register = async (name, email, password, role) => {
     try {
-      const response = await axios.post(`${baseURL}api/auth/register`, { name, email, password, role });
+      const response = await axios.post(`${baseURL}api/auth/register`, { name, email, password, role },{withCredentials:true});
       setUser(response.data.user);
     } catch (error) {
       console.error('Registration failed:', error);
@@ -48,7 +50,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
-      await axios.post(`${baseURL}api/auth/logout`);
+      await axios.post(`${baseURL}api/auth/logout`,{withCredentials:true});
       setUser(null);
     } catch (error) {
       console.error('Logout failed:', error);

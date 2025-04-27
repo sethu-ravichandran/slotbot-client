@@ -1,83 +1,171 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
-import { setHours, setMinutes, addDays, format, isWithinInterval, isAfter } from 'date-fns';
-import { Calendar, Clock, Plus, Check, Trash2 } from 'lucide-react';
+import { setHours, setMinutes, addDays, addHours, format, isWeekend } from 'date-fns';
+import { Calendar, Clock, Plus, Check, Trash2, X } from 'lucide-react';
 import Button from '../components/ui/Button';
+
+const MAX_SLOTS = 5;
 
 const CandidateAvailability = () => {
   const [selectedDate, setSelectedDate] = useState(addDays(new Date(), 1));
   const [startTime, setStartTime] = useState(setHours(setMinutes(new Date(), 0), 9));
-  const [endTime, setEndTime] = useState(setHours(setMinutes(new Date(), 0), 10));
-  const [timeSlots, setTimeSlots] = useState([]);
+  const [endTime, setEndTime] = useState(addHours(setHours(setMinutes(new Date(), 0), 9), 1));
+  const [existingTimeSlots, setExistingTimeSlots] = useState([]);
+  const [newTimeSlots, setNewTimeSlots] = useState([]);
+  const [isFetching, setIsFetching] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [slotToDelete, setSlotToDelete] = useState(null); // for modal confirmation
+  const [isDeleting, setIsDeleting] = useState(false); // loading for delete button
+
+  useEffect(() => {
+    fetchTimeSlots();
+  }, []);
+
+  useEffect(() => {
+    setEndTime(addHours(startTime, 1));
+  }, [startTime]);
+
+  const fetchTimeSlots = async () => {
+    try {
+      setIsFetching(true);
+      const response = await axios.get('http://localhost:3500/api/availability/', {
+        withCredentials: true,
+        params: { status: 'available' }
+      });
+      setExistingTimeSlots(response.data.timeSlots || []);
+    } catch (error) {
+      toast.error('Failed to fetch availability.');
+      console.error(error);
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
   const handleAddTimeSlot = () => {
+    if (existingTimeSlots.length + newTimeSlots.length >= MAX_SLOTS) {
+      toast.error(`You can only add up to ${MAX_SLOTS} time slots.`);
+      return;
+    }
+
+    if (isWeekend(selectedDate)) {
+      toast.error('Cannot select a Saturday or Sunday.');
+      return;
+    }
+
     const slotStartTime = new Date(selectedDate);
     slotStartTime.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
 
     const slotEndTime = new Date(selectedDate);
     slotEndTime.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
 
-    if (!isAfter(slotEndTime, slotStartTime)) {
-      toast.error('End time must be after start time');
+    const durationMinutes = (slotEndTime - slotStartTime) / (1000 * 60);
+    if (durationMinutes !== 60) {
+      toast.error('Slot must be exactly 1 hour.');
       return;
     }
 
-    const hasOverlap = timeSlots.some(slot => {
+    const hasOverlap = [...existingTimeSlots, ...newTimeSlots].some(slot => {
       const existingStart = new Date(slot.startTime);
       const existingEnd = new Date(slot.endTime);
 
       return (
-        isWithinInterval(slotStartTime, { start: existingStart, end: existingEnd }) ||
-        isWithinInterval(slotEndTime, { start: existingStart, end: existingEnd }) ||
-        (isAfter(slotEndTime, existingStart) && isAfter(existingEnd, slotStartTime))
+        (slotStartTime > existingStart && slotStartTime < existingEnd) ||
+        (slotEndTime > existingStart && slotEndTime < existingEnd) ||
+        (slotStartTime <= existingStart && slotEndTime >= existingEnd)
       );
     });
 
     if (hasOverlap) {
-      toast.error('This time slot overlaps with an existing one');
+      toast.error('This time slot overlaps with an existing one.');
       return;
     }
 
-    setTimeSlots([
-      ...timeSlots,
+    setNewTimeSlots(prev => [
+      ...prev,
       {
         id: Math.random().toString(36).substring(2, 9),
-        date: selectedDate,
         startTime: slotStartTime,
-        endTime: slotEndTime
+        endTime: slotEndTime,
       }
     ]);
 
-    toast.success('Time slot added');
+    toast.success('Time slot added.');
   };
 
-  const handleRemoveTimeSlot = (id) => {
-    setTimeSlots(timeSlots.filter(slot => slot.id !== id));
-    toast.success('Time slot removed');
+  const handleConfirmDelete = async () => {
+    if (!slotToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      if (slotToDelete._id) {
+        // existing slot, call DELETE API
+        await axios.delete(`http://localhost:3500/api/availability/${slotToDelete._id}`, {
+          withCredentials: true
+        });
+        setExistingTimeSlots(prev => prev.filter(s => s._id !== slotToDelete._id));
+        toast.success('Time slot deleted.');
+      } else {
+        // new slot, just remove locally
+        setNewTimeSlots(prev => prev.filter(s => s.id !== slotToDelete.id));
+        toast.success('Time slot removed.');
+      }
+    } catch (error) {
+      toast.error('Failed to delete time slot.');
+      console.error(error);
+    } finally {
+      setIsDeleting(false);
+      setSlotToDelete(null);
+    }
   };
 
-  const handleSubmitAvailability = () => {
-    if (timeSlots.length === 0) {
-      toast.error('Please add at least one time slot');
+  const handleSubmitAvailability = async () => {
+    if (newTimeSlots.length === 0) {
+      toast.error('Please add at least one new time slot.');
       return;
     }
 
     setIsSubmitting(true);
+    try {
+      const payload = newTimeSlots.map(slot => ({
+        startTime: slot.startTime.toISOString(),
+        endTime: slot.endTime.toISOString()
+      }));
 
-    setTimeout(() => {
-      toast.success('Your availability has been submitted');
+      await axios.post('http://localhost:3500/api/availability/', payload, {
+        withCredentials: true
+      });
+
+      toast.success('Your availability has been submitted.');
+
+      // Refresh the data
+      fetchTimeSlots();
+      setNewTimeSlots([]);
+    } catch (error) {
+      toast.error('Failed to submit availability.');
+      console.error(error);
+    } finally {
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
+
+  if (isFetching) {
+    return (
+      <div className="text-center py-10 text-gray-500">
+        Loading availability...
+      </div>
+    );
+  }
+
+  const allSlots = [...existingTimeSlots, ...newTimeSlots];
 
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-gray-900">My Availability</h1>
-
         <Button
           variant="primary"
           onClick={handleSubmitAvailability}
@@ -101,6 +189,7 @@ const CandidateAvailability = () => {
                   selected={selectedDate}
                   onChange={(date) => setSelectedDate(date)}
                   minDate={new Date()}
+                  filterDate={(date) => !isWeekend(date)}
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                   dateFormat="MMMM d, yyyy"
                 />
@@ -125,18 +214,15 @@ const CandidateAvailability = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">End Time</label>
+              <label className="block text-sm font-medium text-gray-700">End Time (Auto)</label>
               <div className="mt-1 flex items-center">
                 <Clock className="mr-2 h-5 w-5 text-gray-400" aria-hidden="true" />
-                <DatePicker
-                  selected={endTime}
-                  onChange={(time) => setEndTime(time)}
-                  showTimeSelect
-                  showTimeSelectOnly
-                  timeIntervals={30}
-                  timeCaption="Time"
-                  dateFormat="h:mm aa"
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                <input
+                  type="text"
+                  value={format(endTime, 'h:mm aa')}
+                  disabled
+                  className="block w-full rounded-md border-gray-300 bg-gray-100 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm cursor-not-allowed"
+                  readOnly
                 />
               </div>
             </div>
@@ -148,7 +234,7 @@ const CandidateAvailability = () => {
               variant="outline"
               icon={<Plus size={18} />}
             >
-              Add Time Slot
+              Add Time Slot ({existingTimeSlots.length + newTimeSlots.length}/{MAX_SLOTS})
             </Button>
           </div>
         </div>
@@ -162,22 +248,22 @@ const CandidateAvailability = () => {
           </p>
         </div>
 
-        {timeSlots.length > 0 ? (
+        {allSlots.length > 0 ? (
           <ul className="divide-y divide-gray-200">
-            {timeSlots.map((slot) => (
-              <li key={slot.id} className="px-4 py-4 sm:px-6">
+            {allSlots.map((slot) => (
+              <li key={slot._id || slot.id} className="px-4 py-4 sm:px-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <Calendar className="mr-2 h-5 w-5 text-gray-400" aria-hidden="true" />
                     <span className="font-medium text-gray-900">
-                      {format(slot.date, 'EEEE, MMMM d, yyyy')}
+                      {format(new Date(slot.startTime), 'EEEE, MMMM d, yyyy')}
                     </span>
                   </div>
 
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleRemoveTimeSlot(slot.id)}
+                    onClick={() => setSlotToDelete(slot)}
                     icon={<Trash2 size={16} />}
                   >
                     Remove
@@ -186,7 +272,7 @@ const CandidateAvailability = () => {
 
                 <div className="mt-2 ml-7 text-sm text-gray-500">
                   <Clock className="mr-2 inline-block h-4 w-4 text-gray-400" aria-hidden="true" />
-                  {format(slot.startTime, 'h:mm a')} - {format(slot.endTime, 'h:mm a')}
+                  {format(new Date(slot.startTime), 'h:mm a')} - {format(new Date(slot.endTime), 'h:mm a')}
                 </div>
               </li>
             ))}
@@ -197,6 +283,24 @@ const CandidateAvailability = () => {
           </div>
         )}
       </div>
+
+      {/* Modal for confirmation */}
+      {slotToDelete && (
+        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
+            <h2 className="text-lg font-semibold text-gray-900">Confirm Deletion</h2>
+            <p className="text-gray-600">Are you sure you want to delete this time slot?</p>
+            <div className="flex justify-end space-x-3">
+              <Button variant="outline" onClick={() => setSlotToDelete(null)} icon={<X size={18} />}>
+                Cancel
+              </Button>
+              <Button variantClasses="danger" onClick={handleConfirmDelete} isLoading={isDeleting}>
+                Yes, Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

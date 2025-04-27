@@ -16,6 +16,7 @@ import RecruiterSchedule from './pages/RecruiterSchedule';
 import MeetingDetails from './pages/MeetingDetails';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
+import RecruiterCandidates from './pages/RecruiterCandidates';
 
 function App() {
   const { user, loading } = useAuth();
@@ -55,6 +56,10 @@ function App() {
           <Route 
             path="/schedule" 
             element={user?.role === 'recruiter' ? <RecruiterSchedule /> : <Navigate to="/dashboard" />} 
+          />
+          <Route 
+            path="/candidates" 
+            element={user?.role === 'recruiter' ? <RecruiterCandidates /> : <Navigate to="/dashboard" />} 
           />
           <Route 
             path="/meetings/:id" 
