@@ -44,7 +44,6 @@ const RecruiterCandidates = () => {
       setIsLoading(true)
       const response = await api.get(`availability/${candidateId}`)
       
-      // Don't show modal until data is ready
       setSelectedCandidate(response.data.candidate)
       
       if (response.data.candidate.status === 'available') {
@@ -54,7 +53,6 @@ const RecruiterCandidates = () => {
       } else if (response.data.candidate.status === 'scheduled') {
         const meetingResponse = await api.get(`meetings/`)
         
-        // Filter meetings for this specific candidate - try all possible property names
         const filteredMeetings = meetingResponse.data.meetings.filter(
           meeting => 
             String(meeting.candidateId) === String(candidateId) || 
@@ -63,7 +61,6 @@ const RecruiterCandidates = () => {
             (meeting.candidate && String(meeting.candidate._id) === String(candidateId))
         )
         
-        // Set the filtered data before opening the modal
         setAvailableSlots(filteredMeetings)
         setIsModalOpen(true)
         setIsLoading(false)
@@ -264,7 +261,6 @@ const RecruiterCandidates = () => {
             {availableSlots.length > 0 ? (
               <ul className="space-y-2 max-h-64 overflow-y-auto">
                 {availableSlots.map((slot, index) => {
-                  // Add defensive check for date conversion
                   try {
                     const start = new Date(slot.startTime)
                     const end = new Date(slot.endTime)
