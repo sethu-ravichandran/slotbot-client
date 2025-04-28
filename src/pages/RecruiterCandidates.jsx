@@ -5,7 +5,7 @@ import Button from '../components/ui/Button'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { setHours, setMinutes } from 'date-fns'
-import { Clock, ClockFading, Sparkles } from 'lucide-react'
+import { Clock, ClockFading, Sparkles, Loader } from 'lucide-react'
 import InputField from '../components/ui/InputField'
 import { api } from '../util/axiosConfig'
 
@@ -14,6 +14,8 @@ const RecruiterCandidates = () => {
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [availableSlots, setAvailableSlots] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isScheduling, setIsScheduling] = useState(false)
   const [duration, setDuration] = useState(60)
   const [startTime, setStartTime] = useState(
     setHours(setMinutes(new Date(), 0), 10)
@@ -39,56 +41,35 @@ const RecruiterCandidates = () => {
 
   const handleSchedule = async (candidateId) => {
     try {
+      setIsLoading(true)
       const response = await api.get(`availability/${candidateId}`)
-
+      
+      // Don't show modal until data is ready
       setSelectedCandidate(response.data.candidate)
-      setAvailableSlots(response.data.availableSlots || [])
-      setIsModalOpen(true)
-
-      if (response.data.candidate.status === 'scheduled') {
+      
+      if (response.data.candidate.status === 'available') {
+        setAvailableSlots(response.data.availableSlots || [])
+        setIsModalOpen(true)
+        setIsLoading(false)
+      } else if (response.data.candidate.status === 'scheduled') {
         const meetingResponse = await api.get(`meetings/`)
-        console.log('All meetings:', meetingResponse.data.meetings)
-        console.log('Current candidate ID:', candidateId)
         
-        // Log each meeting's candidateId to diagnose the issue
-        meetingResponse.data.meetings.forEach(meeting => {
-          console.log('Meeting candidateId:', meeting.candidateId)
-        })
-        
-        // Try multiple possible property names for candidateId
-        const meetingData = meetingResponse.data.meetings.filter(
+        // Filter meetings for this specific candidate - try all possible property names
+        const filteredMeetings = meetingResponse.data.meetings.filter(
           meeting => 
-            meeting.candidateId === candidateId || 
-            meeting.candidate_id === candidateId ||
-            meeting.candidateID === candidateId ||
-            (meeting.candidate && meeting.candidate._id === candidateId)
+            String(meeting.candidateId) === String(candidateId) || 
+            String(meeting.candidate_id) === String(candidateId) ||
+            String(meeting.candidateID) === String(candidateId) ||
+            (meeting.candidate && String(meeting.candidate._id) === String(candidateId))
         )
         
-        console.log('Filtered meetings:', meetingData)
-        
-        if (meetingData.length > 0) {
-          setAvailableSlots(meetingData)
-        } else {
-          // If no meetings found with strict equality, try string comparison
-          const meetingDataStringComparison = meetingResponse.data.meetings.filter(
-            meeting => 
-              String(meeting.candidateId) === String(candidateId) || 
-              String(meeting.candidate_id) === String(candidateId) ||
-              String(meeting.candidateID) === String(candidateId) ||
-              (meeting.candidate && String(meeting.candidate._id) === String(candidateId))
-          )
-          
-          if (meetingDataStringComparison.length > 0) {
-            setAvailableSlots(meetingDataStringComparison)
-          } else {
-            // If still no matches, just show all meetings as a fallback
-            // This is temporary for debugging - remove in production
-            setAvailableSlots(meetingResponse.data.meetings)
-            console.warn('No meetings found for candidate ID, showing all as fallback')
-          }
-        }
+        // Set the filtered data before opening the modal
+        setAvailableSlots(filteredMeetings)
+        setIsModalOpen(true)
+        setIsLoading(false)
       }
     } catch (error) {
+      setIsLoading(false)
       console.error('Error fetching candidate slots or meetings:', error)
       toast.error('Failed to fetch candidate slots or meeting details.')
     }
@@ -119,14 +100,23 @@ const RecruiterCandidates = () => {
   }
 
   const handleAiSchedule = async (candidateId) => {
-    const response = await api.post(`ai/match`, {
-      duration,
-      candidateId,
-      preferences: { startTime, endTime }
-    })
+    try {
+      setIsScheduling(true)
+      const response = await api.post(`ai/match`, {
+        duration,
+        candidateId,
+        preferences: { startTime, endTime }
+      })
 
-    if (response.status == 200) {
-      navigate('/schedule')
+      if (response.status == 200) {
+        toast.success('Meeting scheduled successfully!')
+        navigate('/schedule')
+      }
+    } catch (error) {
+      console.error('Error scheduling with AI:', error)
+      toast.error('Failed to schedule meeting.')
+    } finally {
+      setIsScheduling(false)
     }
   }
 
@@ -243,9 +233,17 @@ const RecruiterCandidates = () => {
                     variant="primary"
                     size="sm"
                     className="ml-4"
+                    disabled={isLoading && selectedCandidate?._id === candidate._id}
                     onClick={() => handleSchedule(candidate._id)}
                   >
-                    {candidate.status === 'available' ? 'Schedule' : 'View'}
+                    {isLoading && selectedCandidate?._id === candidate._id ? (
+                      <div className="flex items-center">
+                        <Loader className="w-4 h-4 mr-2 animate-spin" />
+                        Loading...
+                      </div>
+                    ) : (
+                      candidate.status === 'available' ? 'Schedule' : 'View'
+                    )}
                   </Button>
                 </div>
               </li>
@@ -266,20 +264,30 @@ const RecruiterCandidates = () => {
             {availableSlots.length > 0 ? (
               <ul className="space-y-2 max-h-64 overflow-y-auto">
                 {availableSlots.map((slot, index) => {
-                  const start = new Date(slot.startTime)
-                  const end = new Date(slot.endTime)
+                  // Add defensive check for date conversion
+                  try {
+                    const start = new Date(slot.startTime)
+                    const end = new Date(slot.endTime)
 
-                  return (
-                    <li
-                      key={index}
-                      className="p-2 bg-gray-100 rounded flex justify-between"
-                    >
-                      <span>{formatDate(start)}</span>
-                      <span>{`${formatTime(start)} - ${formatTime(
-                        end
-                      )}`}</span>
-                    </li>
-                  )
+                    return (
+                      <li
+                        key={index}
+                        className="p-2 bg-gray-100 rounded flex justify-between"
+                      >
+                        <span>{formatDate(start)}</span>
+                        <span>{`${formatTime(start)} - ${formatTime(
+                          end
+                        )}`}</span>
+                      </li>
+                    )
+                  } catch (error) {
+                    console.error('Error processing slot dates:', error, slot)
+                    return (
+                      <li key={index} className="p-2 bg-gray-100 rounded">
+                        <span>Invalid meeting data format</span>
+                      </li>
+                    )
+                  }
                 })}
               </ul>
             ) : (
@@ -290,16 +298,31 @@ const RecruiterCandidates = () => {
               {selectedCandidate?.status === 'available' && (
                 <Button
                   variant="primary"
+                  disabled={isScheduling}
                   onClick={() => handleAiSchedule(selectedCandidate._id)}
                 >
-                  {selectedCandidate?.status === 'scheduled'
-                    ? 'Reschedule'
-                    : 'Schedule'}
-                  <Sparkles size={14} />
+                  {isScheduling ? (
+                    <div className="flex items-center">
+                      <Loader className="w-4 h-4 mr-2 animate-spin" />
+                      Scheduling...
+                    </div>
+                  ) : (
+                    <>
+                      {selectedCandidate?.status === 'scheduled' 
+                        ? 'Reschedule' 
+                        : 'Schedule'
+                      }
+                      <Sparkles className="ml-2" size={14} />
+                    </>
+                  )}
                 </Button>
               )}
 
-              <Button variant="outline" onClick={closeModal}>
+              <Button 
+                variant="outline" 
+                onClick={closeModal}
+                disabled={isScheduling}
+              >
                 Close
               </Button>
             </div>
