@@ -40,23 +40,29 @@ const RecruiterCandidates = () => {
   const handleSchedule = async (candidateId) => {
     try {
       const response = await api.get(`availability/${candidateId}`)
-
+  
       setSelectedCandidate(response.data.candidate)
       setAvailableSlots(response.data.availableSlots || [])
       setIsModalOpen(true)
-
+  
       if (response.data.candidate.status === 'scheduled') {
         const meetingResponse = await api.get(`meetings/`)
-
+  
         const meetingData = meetingResponse.data.meetings
-
-        setAvailableSlots(meetingData)
+  
+        // Filter meetings by the selected candidate's ID
+        const candidateMeetings = meetingData.filter(
+          (meeting) => meeting.candidateId === candidateId
+        )
+  
+        setAvailableSlots(candidateMeetings)
       }
     } catch (error) {
       console.error('Error fetching candidate slots or meetings:', error)
       toast.error('Failed to fetch candidate slots or meeting details.')
     }
   }
+  
 
   const closeModal = () => {
     setIsModalOpen(false)
