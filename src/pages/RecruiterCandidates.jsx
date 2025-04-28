@@ -40,29 +40,59 @@ const RecruiterCandidates = () => {
   const handleSchedule = async (candidateId) => {
     try {
       const response = await api.get(`availability/${candidateId}`)
-  
+
       setSelectedCandidate(response.data.candidate)
       setAvailableSlots(response.data.availableSlots || [])
       setIsModalOpen(true)
-  
+
       if (response.data.candidate.status === 'scheduled') {
         const meetingResponse = await api.get(`meetings/`)
-  
-        const meetingData = meetingResponse.data.meetings
-  
-        // Filter meetings by the selected candidate's ID
-        const candidateMeetings = meetingData.filter(
-          (meeting) => meeting.candidateId === candidateId
+        console.log('All meetings:', meetingResponse.data.meetings)
+        console.log('Current candidate ID:', candidateId)
+        
+        // Log each meeting's candidateId to diagnose the issue
+        meetingResponse.data.meetings.forEach(meeting => {
+          console.log('Meeting candidateId:', meeting.candidateId)
+        })
+        
+        // Try multiple possible property names for candidateId
+        const meetingData = meetingResponse.data.meetings.filter(
+          meeting => 
+            meeting.candidateId === candidateId || 
+            meeting.candidate_id === candidateId ||
+            meeting.candidateID === candidateId ||
+            (meeting.candidate && meeting.candidate._id === candidateId)
         )
-  
-        setAvailableSlots(candidateMeetings)
+        
+        console.log('Filtered meetings:', meetingData)
+        
+        if (meetingData.length > 0) {
+          setAvailableSlots(meetingData)
+        } else {
+          // If no meetings found with strict equality, try string comparison
+          const meetingDataStringComparison = meetingResponse.data.meetings.filter(
+            meeting => 
+              String(meeting.candidateId) === String(candidateId) || 
+              String(meeting.candidate_id) === String(candidateId) ||
+              String(meeting.candidateID) === String(candidateId) ||
+              (meeting.candidate && String(meeting.candidate._id) === String(candidateId))
+          )
+          
+          if (meetingDataStringComparison.length > 0) {
+            setAvailableSlots(meetingDataStringComparison)
+          } else {
+            // If still no matches, just show all meetings as a fallback
+            // This is temporary for debugging - remove in production
+            setAvailableSlots(meetingResponse.data.meetings)
+            console.warn('No meetings found for candidate ID, showing all as fallback')
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching candidate slots or meetings:', error)
       toast.error('Failed to fetch candidate slots or meeting details.')
     }
   }
-  
 
   const closeModal = () => {
     setIsModalOpen(false)
@@ -245,7 +275,9 @@ const RecruiterCandidates = () => {
                       className="p-2 bg-gray-100 rounded flex justify-between"
                     >
                       <span>{formatDate(start)}</span>
-                      <span>{`${formatTime(start)} - ${formatTime(end)}`}</span>
+                      <span>{`${formatTime(start)} - ${formatTime(
+                        end
+                      )}`}</span>
                     </li>
                   )
                 })}
