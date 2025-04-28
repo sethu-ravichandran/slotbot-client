@@ -1,6 +1,6 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import React from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import {
   CalendarClock,
   LayoutDashboard,
@@ -10,25 +10,27 @@ import {
   Settings,
   LogOut,
   X
-} from 'lucide-react';
+} from 'lucide-react'
 
 const Sidebar = ({ mobile, onClose }) => {
-  const { user, logout } = useAuth();
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
 
   const handleLogout = async () => {
     try {
-      await logout();
+      await logout()
+      navigate('/login')
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error('Logout failed:', error)
     }
-  };
+  }
 
   const navLinkClasses = ({ isActive }) =>
     `flex items-center px-4 py-2 my-1 text-sm font-medium rounded-md ${
       isActive
         ? 'bg-primary-50 text-primary-700'
         : 'text-gray-600 hover:bg-gray-100'
-    }`;
+    }`
 
   const MobileHeader = () =>
     mobile ? (
@@ -41,10 +43,14 @@ const Sidebar = ({ mobile, onClose }) => {
           <X size={24} />
         </button>
       </div>
-    ) : null;
+    ) : null
 
   return (
-    <div className={`flex flex-col ${mobile ? 'w-full' : 'w-64'} bg-white border-r border-gray-200 p-4`}>
+    <div
+      className={`flex flex-col ${
+        mobile ? 'w-full' : 'w-64'
+      } bg-white border-r border-gray-200 p-4`}
+    >
       <MobileHeader />
 
       {!mobile && (
@@ -68,12 +74,10 @@ const Sidebar = ({ mobile, onClose }) => {
             </NavLink>
           )}
 
-          {user?.role === 'recruiter' && (
-            <NavLink to="/schedule" className={navLinkClasses}>
-              <Calendar size={20} className="mr-3" />
-              My Schedule
-            </NavLink>
-          )}
+          <NavLink to="/schedule" className={navLinkClasses}>
+            <Calendar size={20} className="mr-3" />
+            My Schedule
+          </NavLink>
 
           {user?.role === 'recruiter' && (
             <NavLink to="/candidates" className={navLinkClasses}>
@@ -108,12 +112,14 @@ const Sidebar = ({ mobile, onClose }) => {
           </div>
           <div className="ml-3">
             <p className="text-sm font-medium text-gray-700">{user?.name}</p>
-            <p className="text-xs font-medium text-gray-500 capitalize">{user?.role}</p>
+            <p className="text-xs font-medium text-gray-500 capitalize">
+              {user?.role}
+            </p>
           </div>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default Sidebar;
+export default Sidebar

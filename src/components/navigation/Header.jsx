@@ -1,9 +1,9 @@
-import React from 'react';
-import { Bell, Menu } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import React from 'react'
+import { Bell, Menu } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 
 const Header = ({ onMenuClick }) => {
-  const { user } = useAuth();
+  const { user } = useAuth()
 
   return (
     <header className="bg-white border-b border-gray-200 z-10">
@@ -21,7 +21,9 @@ const Header = ({ onMenuClick }) => {
           </div>
 
           <div className="flex items-center">
-            <h1 className="text-lg font-semibold text-gray-900 md:hidden">SlotBot</h1>
+            <h1 className="text-lg font-semibold text-gray-900 md:hidden">
+              SlotBot
+            </h1>
           </div>
 
           <div className="flex items-center">
@@ -29,7 +31,9 @@ const Header = ({ onMenuClick }) => {
               type="button"
               className="relative rounded-full bg-white p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
             >
-              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center">2</span>
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center">
+                2
+              </span>
               <span className="sr-only">View notifications</span>
               <Bell className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -47,7 +51,7 @@ const Header = ({ onMenuClick }) => {
         </div>
       </div>
     </header>
-  );
-};
+  )
+}
 
-export default Header;
+export default Header
